@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="video">
+
+    </div>
+</body>
+</html>
+<script src="https://apis.google.com/js/api.js"></script>
+<script>
+    let nodoVideo = document.getElementById("video");
+  /**
+   * Sample JavaScript code for youtube.liveBroadcasts.insert
+   * See instructions for running APIs Explorer code samples locally:
+   * https://developers.google.com/explorer-help/guides/code_samples#javascript
+   */
+   function authenticate() {
+    return gapi.auth2.getAuthInstance()
+        .signIn({scope: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtubepartner"})
+        .then(function() { 
+          console.log("Sign-in successful");
+           },
+              function(err) { console.error("Error signing in", err); });
+  }
+  function loadClient() {
+    gapi.client.setApiKey("");
+    return gapi.client.load("https://content.googleapis.com/discovery/v1/apis/youtube/v3/rest")
+        .then(function() { 
+          console.log("GAPI client loaded for API");
+          },
+              function(err) { console.error("Error loading GAPI client for API", err); });
+  }
+  // Make sure the client is loaded and sign-in is complete before calling this method.
+  function executeBroadcast() {
+    return gapi.client.youtube.liveBroadcasts.insert({
+      "part": [
+        "snippet,status,contentDetails"
+      ],
+      "resource": {
+        "snippet": {
+          "title": "Prueba 2",
+          "scheduledStartTime": "2020-07-18T02:59:00"
+        },
+        "status": {
+          "privacyStatus": "unlisted",
+          "selfDeclaredMadeForKids":false
+        },
+        "contentDetails":{
+            "monitorStream":{
+                "enableMonitorStream":true
+            },
+            "enableAutoStart": true,
+        }
+      }
+    })
+        .then(function(response) {
+                // Handle the results here (response.result has the parsed body).
+                let id = response.result.id;
+                executeStream(id);
+                console.log("Response executeBroadcast", response);
+              },
+              function(err) { console.error("Execute error", err); });
+  }
+  function executeStream(id) {
+    return gapi.client.youtube.liveStreams.insert({
+        "part": [
+        "snippet,cdn,contentDetails, status"
+        ],
+        "resource": {
+            "snippet": {
+                "title":"Your new Stream",
+                "isDefaultStream": true
+            },
+            "cdn": {
+                "frameRate": "variable",
+                "ingestionType": "hls",
+                "resolution": "variable"
+            },
+            "contentDetails":{
+                "enableAutoStart": true,
+            },
+            "status": {
+                "healthStatus": {
+                "configurationIssues": [
+                    {
+                    "reason": "",
+                    "description": "",
+                    "severity": "info"
+                    }
+                ]
+                }
+            }
+        }
+    })
+        .then(function(response) {
+                // Handle the results here (response.result has the parsed body).
+                let streamId = response.result.id;
+                executeBind(id, streamId);
+                console.log("Response executeStream", response);
+              },
+              function(err) { console.error("Execute error", err); });
+  }
+  function executeBind(id, streamId) {      
+    return gapi.client.youtube.liveBroadcasts.bind({
+        "id": id,
+        "part": [
+            "snippet,status"
+        ],
+        "resource": {
+            "status": {
+                "streamStatus":"active",
+                "healthStatus": {
+                "configurationIssues": [
+                    {
+                    "reason": "",
+                    "description": "",
+                    "severity": "info"
+                    }
+                ]
+                }
+            }
+        },
+        "streamId": streamId,
+
+    })
+        .then(function(response) {
+                // Handle the results here (response.result has the parsed body).
+                let idEmbed = response.result.id;
+                executeShow(idEmbed,id);
+                console.log("Response executeBind", response);
+                
+              },
+              function(err) { console.error("Execute error", err); });
+  }
+  function executeShow(idEmbed,id) {
+    return gapi.client.youtube.liveBroadcasts.list({
+        "id": idEmbed,
+      "part": [
+        "contentDetails,status "
+      ],
+      "resource": {
+        "contentDetails":{
+            "streamDetails" : "monitorStreamEmbedHtml",
+        },
+        "status": {
+            "streamStatus":"active",
+            "healthStatus": {
+                "configurationIssues": [
+                {
+                    "reason": "",
+                    "description": "",
+                    "severity": "info"
+                }
+                ]
+            }
+        }
+    }
+    })
+    .then(function(response) {
+    // Handle the results here (response.result has the parsed body).
+        console.log(response.result.items[0].status);
+        
+        if(response.result.items[0].status.streamStatus == "active"){
+            executeTransition(id);
+        }
+        nodoVideo.innerHTML += response.result.items[0].contentDetails.monitorStream.embedHtml
+        console.log("Response executeShow", response);
+    },
+    function(err) { console.error("Execute error", err); });
+  }
+  function executeTransition(id) {
+    return gapi.client.youtube.liveBroadcasts.transition({
+      "id": id,
+      "broadcastStatus": "live",
+      "part": [
+        "status,contentDetails"
+      ],
+      "resource": {
+        "status": {
+                "healthStatus": {
+                "configurationIssues": [
+                    {
+                    "reason": "",
+                    "description": "",
+                    "severity": "info"
+                    }
+                ]
+            }
+        },
+        "contentDetails":{
+            "monitorStream": {
+                "enableMonitorStream":true,
+                "enableAutoStart":true
+            }
+        }    
+      }
+    })
+        .then(function(response) {
+                // Handle the results here (response.result has the parsed body).
+                console.log("Response executeTransition", response);
+              },
+              function(err) { console.error("Execute error", err); });
+  }
+  gapi.load("client:auth2", function() {
+    gapi.auth2.init({client_id: ""});
+  });
+</script>
+<button onclick="authenticate().then(loadClient)">authorize and load</button>
+<button onclick="executeBroadcast()">executeBroadcast</button>
+
+
